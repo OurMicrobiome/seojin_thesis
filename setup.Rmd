@@ -68,6 +68,7 @@ BiocManager::install("Biostrings")
 BiocManager::install("coRdon")
 BiocManager::install("ComplexHeatmap")
 BiocManager::install("ggtree")
+BiocManager::install("DESeq2")
 
 # install gRodon
 devtools::install_github("jlw-ecoevo/gRodon")
@@ -106,6 +107,7 @@ library(BiocManager)
 library(Biostrings)
 library(ComplexHeatmap)
 library(coRdon)
+library(DESeq2)
 
 # everything else
 library(gRodon)
