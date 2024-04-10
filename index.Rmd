@@ -16,15 +16,12 @@ The following directory contains HTML files outlining the code used to generate 
 # HTML files
 * [Setting up in RStudio](setup.html)
 * [Generating Sankey plot](mag_taxonomy_sankey.html)
-* [MetaBAT analyses]()
+* [MetaBAT analyses](metabat_analyses.html)
 * [Extract traits and build matrices]()
 * [Trait selection and processing]()
 * [Problematic classification of decomposers]()
 * [Hierarchical clustering and heatmap]()
 * [Differential abundance analysis]()
-
-# Images/figures
-* [Interactive HTML file with Pavian Sankey Plot for BW filter metagenomes](sankey-BW_coassembly_GTDB_pavian.html)
 
 # Miscellaneous code not included in main work
 * [Counts of MAGs per trait]()

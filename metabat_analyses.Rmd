@@ -1,0 +1,313 @@
+---
+title: "Surveying taxonomic diversity of MAGs from MetaBAT output"
+author: "Seojin Jung"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(DT)
+library(gridExtra)
+```
+
+This file covers the generation of various graphs and other figures to analyze the taxonomic diversity of the MAGs from Barre Woods.
+
+# Extract data from TSV
+```{r extract_data}
+BW_coassembly_GTDB_all <- read_tsv("data/metaG_coassembly_all_metabat.tsv")
+
+# HQ only
+BW_coassembly_90_5 <- BW_coassembly_GTDB_all %>%
+  filter(Completeness > 90) %>% 
+  filter(Contamination < 5) 
+  write_tsv(BW_coassembly_90_5, "data/BW_coassembly_90_5.tsv")
+  
+# MQ only
+BW_coassembly_50_10 <- BW_coassembly_GTDB_all %>%
+  filter(`Bin Quality` == 'MQ')
+
+# for some reason the Bin Quality columns don't match actual completion/contamination values,
+# so i'm just going to update them for this
+BW_coassembly_GTDB_all <- BW_coassembly_GTDB_all %>% 
+  mutate(
+    `Bin Quality` = case_when(
+      Completeness > 90 & Contamination < 5 ~ 'HQ',
+      TRUE ~ `Bin Quality`
+    )
+  )
+```
+
+# Tables
+## Table of Phylum Counts
+```{r phylum_cts}
+datatable(BW_coassembly_GTDB_all %>% 
+  group_by(Phylum) %>% 
+  summarise(n = n()) %>%
+  mutate(freq = 100 * n / sum(n)) %>% 
+  # mutate(freq = n / sum(n)) %>% 
+  mutate_if(is.numeric, round, 1)  
+)
+```
+
+## Table of Class counts
+```{r class_cts}
+datatable(BW_coassembly_GTDB_all %>% 
+  group_by(Class) %>% 
+  summarise(n = n()) %>%
+  mutate(freq = 100 * n / sum(n)) %>% 
+  mutate_if(is.numeric, round, 1)  
+)
+```
+
+## Table of High Quality MAGs
+```{r hq_mags}
+datatable(BW_coassembly_90_5 %>% 
+  group_by(Phylum) %>% 
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n)) %>% 
+  arrange(-n)
+)
+```
+
+# Counts
+## Number of Archaea vs. Bacteria 
+```{r archaea_vs_bacteria, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  count(`Bin Quality`, Domain, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Domain, n), y = n, fill = `Bin Quality`)) +
+  geom_col() +
+  # geom_text(aes(label = n), hjust = -0.25, size = 3) +
+  coord_flip() +
+  ggtitle("Number of MAGs for each Domain") +
+  ylab("Number of MAGs") + 
+  xlab("Domain")
+
+# ggsave("images/num_mags_per_domain.png", plot=last_plot()
+```
+
+## Phyla MAG count bar chart
+```{r phylum_cts_bar, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  count(Phylum, `Bin Quality`, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Phylum, n), y = n, fill = `Bin Quality`)) +
+  geom_col() +
+  coord_flip() +
+  ggtitle("Number of MAGs for each Phylum") +
+  ylab("Number of MAGs") + 
+  xlab("Phylum") 
+  
+# ggsave("images/num_mags_per_phylum.png", plot=last_plot())
+```
+
+## Class MAG count bar chart
+```{r class_cts_bar, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  count(Class, `Bin Quality`, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Class, n), y = n, fill = `Bin Quality`)) +
+  geom_col() +
+  coord_flip() +
+  ggtitle("Number of MAGs for each Class") +
+  ylab("Number of MAGs") + 
+  xlab("Class")
+
+# ggsave("images/num_mags_per_class.png", plot=last_plot())
+```
+
+## Novel genus count per phylum bar chart
+```{r novel_genera, fig.height = 6, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  filter(is.na(Genus)) %>%
+  count(Phylum, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Phylum, n), y = n)) +
+  geom_col(colour = "dodgerblue", fill = "dodgerblue") +
+  coord_flip() +
+  ggtitle("Novel Genera per Phylum") +
+  ylab("Number of MAGs") + 
+  xlab("Phylum")
+
+datatable(BW_coassembly_GTDB_all %>% 
+  filter(is.na(Genus)) %>%
+  count(Phylum, sort = TRUE)
+)
+
+# ggsave("images/novel_genera_per_phylum.png", plot=last_plot())
+```
+
+## Novel Families
+```{r novel_families, fig.height = 6, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  filter(is.na(Family)) %>%
+  count(Phylum, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Phylum, n), y = n)) +
+  geom_col(colour = "dodgerblue", fill = "dodgerblue") +
+  coord_flip() +
+  ggtitle("Novel Families per Phylum") +
+  ylab("Number of MAGs") + 
+  xlab("Phylum")
+
+# ggsave("images/novel_families_per_phylum.png", plot=last_plot())
+```
+
+## Novel Orders
+```{r novel_orders, fig.height = 6, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  filter(is.na(Order)) %>%
+  count(Phylum, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Phylum, n), y = n)) +
+  geom_col(colour = "dodgerblue", fill = "dodgerblue") +
+  coord_flip() +
+  ggtitle("Novel Orders per Phylum") +
+  ylab("Number of MAGs") + 
+  xlab("Phylum")
+
+# ggsave("images/novel_orders_per_phylum.png", plot=last_plot())
+```
+
+## Novel Classes
+```{r novel_classes, fig.height = 6, echo=FALSE}
+BW_coassembly_GTDB_all %>% 
+  filter(is.na(Class)) %>%
+  count(Phylum, sort = TRUE) %>% 
+  ggplot(aes(x=reorder(Phylum, n), y = n)) +
+  geom_col(colour = "dodgerblue", fill = "dodgerblue") +
+  coord_flip() +
+  ggtitle("Novel Classes per Phylum") +
+  ylab("Number of MAGs") + 
+  xlab("Phylum")
+
+# ggsave("images/novel_classes_per_phylum.png", plot=last_plot())
+```
+
+# Genome sizes
+## Histogram of genome sizes
+```{r size_hist}
+BW_coassembly_GTDB_all %>% 
+ggplot(aes(x = `Total Number of Bases`)) + 
+  geom_histogram(colour = "black", fill = "maroon", binwidth=500000) +
+  ggtitle("Genome size of MAGs") +
+  ylab("Genome size") + 
+  theme(text = element_text(size = 20, color="black")) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm"))
+#  theme(axis.text.x = element_text(angle = 90)) 
+
+# ggsave("images/mags_size.png", plot=last_plot())
+```
+
+## Total number of bases vs. gene count for each bin
+```{r bases_genes}
+# get r^2
+gen_size <- lm(BW_coassembly_GTDB_all$`Total Number of Bases` ~ BW_coassembly_GTDB_all$`Gene Count`)
+rsq <- round(summary(gen_size)$r.squared, 4)
+
+BW_coassembly_GTDB_all %>% 
+ggplot(aes(x = `Total Number of Bases`, y = `Gene Count`)) + 
+  geom_point(color = 'springgreen3', alpha = 0.30) + 
+  ggtitle("Genome size vs. gene count per MAG") +
+  xlab("MAG size (bp)") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 0.2) +
+  annotate("text", x = max(BW_coassembly_GTDB_all$`Total Number of Bases`), 
+           y = max(BW_coassembly_GTDB_all$`Gene Count`), 
+           label = bquote(R^2 == .(rsq)), 
+           hjust = 1.1, vjust = 1.1) +
+  theme(text = element_text(size = 15, color="black")) +
+  theme(plot.margin = margin(1, 2, 1, 1, "cm"))
+
+# ggsave("images/base_vs_gene_count.png", plot=last_plot())
+```
+
+## Genome size by phylum
+```{r size_by_phylum}
+BW_coassembly_GTDB_all %>% 
+  ggplot(aes(x = reorder(Phylum, `Total Number of Bases`), y = `Total Number of Bases`, color = Domain)) + 
+  geom_point() +
+  ggtitle("Genome size of MAGs for each Phylum") +
+  ylab("MAG size (bp)") + 
+  xlab("Phylum") +
+  coord_flip()
+
+# get min/max vals
+BW_coassembly_GTDB_all %>%
+  group_by(Phylum) %>%
+  summarize(
+    min = min(`Total Number of Bases`),
+    max = max(`Total Number of Bases`)
+  )
+
+
+# ggsave("images/genome_size_by_phylum.png", plot=last_plot())
+```
+
+## Genome size by class
+```{r size_by_class}
+BW_coassembly_GTDB_all %>% 
+  filter(!is.na(Class)) %>%
+  ggplot(aes(x = reorder(Class, `Total Number of Bases`), y = `Total Number of Bases`, color = Domain)) + 
+  geom_point() +
+  ggtitle("Genome size of MAGs for each Class") +
+  ylab("MAG size (bp)") + 
+  xlab("Class") +
+  coord_flip()
+
+# ggsave("images/genome_size_by_class.png", plot=last_plot())
+```
+
+## Range of genome sizes per phylum
+```{r size_range_by_phylum}
+genome_range_by_phylum <- BW_coassembly_GTDB_all %>% group_by(Phylum) %>%
+  summarise(min = min(`Total Number of Bases`),
+            max = max(`Total Number of Bases`),
+            avg = mean(`Total Number of Bases`))
+
+BW_coassembly_GTDB_all %>% 
+  ggplot(aes(x = `Total Number of Bases`, y = Phylum)) + 
+  ggtitle("Genome sizes per phylum") + 
+  geom_boxplot(fill = "springgreen3") + 
+  theme(plot.margin = margin(1, 1, 1, 1, "cm"))
+  
+# ggsave("images/genome_size_range.png", plot=last_plot())
+```
+
+# Completeness
+## Completeness by bin
+```{r bin_completeness}
+BW_coassembly_GTDB_all %>% 
+ggplot(aes(x = `Completeness`, fill = `Bin Quality`)) + 
+  geom_histogram(colour = "black", binwidth=5) +
+  ggtitle("Completeness of MAGs") +
+  ylab("Number of MAGs") + 
+  xlab("Completeness (%)") +
+  theme(text = element_text(size = 20, color="black")) 
+
+# vals
+BW_coassembly_GTDB_all %>%
+  summarize(
+    min = min(Completeness),
+    max = max(Completeness),
+    avg = mean(Completeness)
+  )
+
+BW_coassembly_90_5 %>%
+    summarize(
+    min = min(Completeness),
+    max = max(Completeness),
+    avg = mean(Completeness)
+  )
+
+BW_coassembly_50_10 %>%
+  summarize(
+    min = min(Completeness),
+    max = max(Completeness),
+    avg = mean(Completeness)
+  )
+
+# ggsave("images/bin_completeness.png", plot=last_plot())
+```

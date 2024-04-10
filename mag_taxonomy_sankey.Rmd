@@ -30,7 +30,7 @@ This file walks through the process to generate a Sankey visualization of the me
 
 ## Make input for for Pavian Sankey Plot (from GTDB format)
 
-```{r}
+```{r pavian_input}
 BW_coassembly_GTDB <- read_tsv("data/metaG_coassembly_all_metabat.tsv")  %>% 
   select('Bin ID', Domain, Phylum, Class, Order, Family, Genus) %>%
   mutate_at('Domain', ~paste0("d__", .)) %>% 
@@ -66,11 +66,11 @@ BW_coassembly_GTDB_allTaxa <- bind_rows(BW_coassembly_GTDB_s, BW_coassembly_GTDB
   rename(`Metaphlan2_Analysis` = `n`)
 ```
 
-```{r}
+```{r export_txt}
 write_tsv(BW_coassembly_GTDB_allTaxa, "data/BW_coassembly_GTDB_pavian.txt")
 ```
 
-```{r}
+```{r export_id}
 write_tsv(BW_coassembly_GTDB, "data/BW_coassembly_GTDB_with_ID.tsv")
 ```
 
