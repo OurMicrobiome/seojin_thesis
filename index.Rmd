@@ -13,4 +13,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The following directory contains HTML files outlining the code used to generate the results presented in Seojin Jung's senior thesis in Biology at Amherst College, "Metagenome analysis of soil-dwelling bacterial decomposers following long-term warming using a reference genome approach." The main repository is [here](https://github.com/OurMicrobiome/seojin_thesis).
 
-* [Setup]()
+# HTML files
+* [Setting up in RStudio](setup.html)
+
+# Images/figures
+*
