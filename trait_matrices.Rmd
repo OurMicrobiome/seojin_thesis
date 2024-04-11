@@ -1,0 +1,85 @@
+---
+title: "Trait matrices"
+author: "Seojin Jung"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libs, warning=FALSE, message=FALSE}
+packages <- c("R.utils", "ape", "assertthat", "checkmate", "coRdon", 
+              "corrplot", "devtools", "doParallel", "dplyr", "factoextra", 
+              "formatR", "futile.logger", "ggplot2", "grid", "gtools", "kmed", 
+              "lazyeval", "magrittr", "parallel", "readr", "stringr", "tibble", 
+              "tictoc", "tidyr")
+
+for (pkg in packages) {
+  library(pkg, character.only=TRUE)
+}
+
+library(microtrait)
+```
+
+This file is for running the process of extracting traits from genomes in microTrait and building trait matrices from the results. Thanks to Luciana Chavez Rodriguez for providing the starting code.
+
+# Extract traits from a single genome sequence
+
+As a test, we extract traits from a single genome first.
+
+```{r extract_single, eval = FALSE}
+result = microtrait::extract.traits("./data/all_fna/3300050821_10.fna",
+                                    out_dir = "./data/microtrait_output")
+```
+
+# Extract traits from multiple genomes in parallel
+
+Now we extract traits in parallel. This step can take quite some time; if possible, batching the job is recommended.
+
+```{r extract_parallel, eval = FALSE}
+genomes_files = list.files('./data/all_fna')
+genomes_paths = file.path('./data/all_fna', genomes_files)
+output_paths = rep('./data/microtrait_output', times = length(genomes_files))
+message("Number of cores: ", parallel::detectCores(), "\n")
+
+tictoc::tic.clearlog()
+tictoc::tic(paste0("Running microtrait for ", length(genomes_files)))
+microtrait_results = microtrait::extract.traits.parallel(genomes_paths, 
+                                                         output_paths,
+                                                         ncores = floor(parallel::detectCores()*0.9))
+tictoc::toc(log = "TRUE")
+```
+
+## Recovering from an interrupted job
+
+If batching is not possible and you are unable to run the above chunk in one sitting, this code chunk will let you "find your spot" so you can resume extracting traits without starting over.
+
+```{r resume_extract, eval = FALSE}
+rds_files = list.files('./data/microtrait_output', full.names = F, 
+                       recursive = F, pattern = ".microtrait.rds$") %>%
+  sub(pattern = '.microtrait.rds$', replacement = '.fna')
+genomes_files2 <- genomes_files[!(genomes_files %in% rds_files)]
+genomes_files <- genomes_files2
+genomes_paths = file.path('./data/all_fna', genomes_files2)
+output_paths = rep('./data/microtrait_output', times = length(genomes_files2))
+```
+
+# Build trait matrices from results
+
+At this point, we have a folder containing `.rds` outputs of trait extraction. We load these outputs into a variable `genomeset_results`.
+
+```{r compile_results, eval=FALSE}
+rds_files = list.files('./data/microtrait_output', full.names = T, recursive = F, 
+                       pattern = ".microtrait.rds$")
+microtrait_results <- lapply(rds_files, readRDS)
+genomeset_results = microtrait::make.genomeset.results(rds_files = rds_files,
+                                                       ids = sub(".microtrait.rds", "",
+                                                                 basename(rds_files)),
+                                                       ncores = 1)
+```
