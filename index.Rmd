@@ -19,7 +19,7 @@ The following directory contains HTML files outlining the code used to generate 
 * [MetaBAT analyses](metabat_analyses.html)
 * [Extract traits and build matrices](trait_matrices.html)
 * [Trait selection and processing](trait_select.html)
-* [Problematic classification of decomposers]()
+* [Problematic classification of decomposers](decomposers.html)
 * [Hierarchical clustering and heatmap]()
 * [Differential abundance analysis]()
 
