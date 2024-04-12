@@ -13,7 +13,7 @@
 
 <meta name="date" content="2024-04-12" />
 
-<title>Trait matrices</title>
+<title>Trait selection and processing</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -368,7 +368,7 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Trait matrices</h1>
+<h1 class="title toc-ignore">Trait selection and processing</h1>
 <h4 class="author">Seojin Jung</h4>
 <h4 class="date">2024-04-12</h4>
 
@@ -376,87 +376,220 @@ display: none;
 
 <div id="TOC">
 <ul>
-<li><a href="#extract-traits-from-a-single-genome-sequence" id="toc-extract-traits-from-a-single-genome-sequence"><span class="toc-section-number">1</span> Extract traits from a single genome
-sequence</a></li>
-<li><a href="#extract-traits-from-multiple-genomes-in-parallel" id="toc-extract-traits-from-multiple-genomes-in-parallel"><span class="toc-section-number">2</span> Extract traits from multiple genomes
-in parallel</a>
+<li><a href="#get-taxonomy-information-from-metabat-output" id="toc-get-taxonomy-information-from-metabat-output"><span class="toc-section-number">1</span> Get taxonomy information from
+MetaBAT output</a></li>
+<li><a href="#trait-selection" id="toc-trait-selection"><span class="toc-section-number">2</span> Trait selection</a>
 <ul>
-<li><a href="#recovering-from-an-interrupted-job" id="toc-recovering-from-an-interrupted-job"><span class="toc-section-number">2.1</span> Recovering from an interrupted
-job</a></li>
+<li><a href="#select-all-traits" id="toc-select-all-traits"><span class="toc-section-number">2.1</span> Select all traits</a></li>
+<li><a href="#select-complex-carbohydrate-depolymerization-traits---dont-do" id="toc-select-complex-carbohydrate-depolymerization-traits---dont-do"><span class="toc-section-number">2.2</span> Select complex carbohydrate
+depolymerization traits - don’t do</a></li>
+<li><a href="#select-carbohydrate-transport-traits" id="toc-select-carbohydrate-transport-traits"><span class="toc-section-number">2.3</span> Select carbohydrate transport
+traits</a></li>
+<li><a href="#select-gh-genes" id="toc-select-gh-genes"><span class="toc-section-number">2.4</span> Select GH genes</a></li>
+<li><a href="#combine-gh-and-transport-traits-isolate-decomposers" id="toc-combine-gh-and-transport-traits-isolate-decomposers"><span class="toc-section-number">2.5</span> Combine GH and transport traits;
+isolate decomposers</a></li>
 </ul></li>
-<li><a href="#build-trait-matrices-from-results" id="toc-build-trait-matrices-from-results"><span class="toc-section-number">3</span> Build trait matrices from
-results</a></li>
+<li><a href="#export-data" id="toc-export-data"><span class="toc-section-number">3</span> Export data</a></li>
 </ul>
 </div>
 
-<pre class="r"><code>packages &lt;- c(&quot;R.utils&quot;, &quot;ape&quot;, &quot;assertthat&quot;, &quot;checkmate&quot;, &quot;coRdon&quot;, 
-              &quot;corrplot&quot;, &quot;devtools&quot;, &quot;doParallel&quot;, &quot;dplyr&quot;, &quot;factoextra&quot;, 
-              &quot;formatR&quot;, &quot;futile.logger&quot;, &quot;ggplot2&quot;, &quot;grid&quot;, &quot;gtools&quot;, &quot;kmed&quot;, 
-              &quot;lazyeval&quot;, &quot;magrittr&quot;, &quot;parallel&quot;, &quot;readr&quot;, &quot;stringr&quot;, &quot;tibble&quot;, 
-              &quot;tictoc&quot;, &quot;tidyr&quot;)
-
+<pre class="r"><code>packages &lt;- c(&quot;R.utils&quot;, &quot;RColorBrewer&quot;, &quot;ape&quot;, &quot;assertthat&quot;, &quot;checkmate&quot;,
+              &quot;coRdon&quot;, &quot;corrplot&quot;, &quot;dendextend&quot;, &quot;devtools&quot;, &quot;doParallel&quot;, 
+              &quot;dplyr&quot;, &quot;factoextra&quot;, &quot;formatR&quot;, &quot;futile.logger&quot;, &quot;ggplot2&quot;, 
+              &quot;grid&quot;, &quot;gtools&quot;, &quot;kmed&quot;, &quot;lazyeval&quot;, &quot;magrittr&quot;, &quot;parallel&quot;, 
+              &quot;pheatmap&quot;, &quot;readr&quot;, &quot;stringr&quot;, &quot;tibble&quot;, &quot;tictoc&quot;, &quot;tidyr&quot;, &quot;vegan&quot;)
 for (pkg in packages) {
   library(pkg, character.only=TRUE)
 }
 
+# bioconductor packages
+library(BiocManager)
+library(Biostrings)
+library(ComplexHeatmap)
+library(coRdon)
+
+# everything else
+library(gRodon)
+library(pairwiseAdonis)
+library(EcolUtils)
+library(ggtree)
 library(microtrait)</code></pre>
-<p>This file is for running the process of extracting traits from
-genomes in microTrait and building trait matrices from the results.
-Thanks to Luciana Chavez Rodriguez for providing the starting code.</p>
-<div id="extract-traits-from-a-single-genome-sequence" class="section level1" number="1">
-<h1><span class="header-section-number">1</span> Extract traits from a
-single genome sequence</h1>
-<p>As a test, we extract traits from a single genome first.</p>
-<pre class="r"><code>result = microtrait::extract.traits(&quot;./data/all_fna/3300050821_10.fna&quot;,
-                                    out_dir = &quot;./data/microtrait_output&quot;)</code></pre>
-</div>
-<div id="extract-traits-from-multiple-genomes-in-parallel" class="section level1" number="2">
-<h1><span class="header-section-number">2</span> Extract traits from
-multiple genomes in parallel</h1>
-<p>Now we extract traits in parallel. This step can take quite some
-time; if possible, batching the job is recommended.</p>
-<pre class="r"><code>genomes_files = list.files(&#39;./data/all_fna&#39;)
-genomes_paths = file.path(&#39;./data/all_fna&#39;, genomes_files)
-output_paths = rep(&#39;./data/microtrait_output&#39;, times = length(genomes_files))
-message(&quot;Number of cores: &quot;, parallel::detectCores(), &quot;\n&quot;)
+<pre class="r"><code>genomeset_results &lt;- readRDS(&quot;data/genomeset_results.rds&quot;)</code></pre>
+<p>This file goes over trait selection from the microTrait outputs.</p>
+<div id="get-taxonomy-information-from-metabat-output" class="section level1" number="1">
+<h1><span class="header-section-number">1</span> Get taxonomy
+information from MetaBAT output</h1>
+<p>MAG metadata from sequencing was stored in a TSV. To help identify
+MAGs, their taxonomic information is extracted and appended to the
+clusters as strings approximating GTDB format.</p>
+<pre class="r"><code># extract taxonomy
+bw_gtdb_tax &lt;- read_tsv(&quot;data/metaG_coassembly_all_metabat.tsv&quot;) %&gt;%
+  select(&#39;Bin ID&#39;, Domain, Phylum, Class, Order, Family, Genus) </code></pre>
+<pre><code>## Rows: 817 Columns: 22
+## ── Column specification ────────────────────────────────────────────────────────
+## Delimiter: &quot;\t&quot;
+## chr  (11): Bin ID, Bin Quality, Bin Lineage, Domain, Phylum, Class, Order, F...
+## dbl   (9): Completeness, Contamination, Total Number of Bases, 5s rRNA, 16s ...
+## lgl   (1): ...1
+## date  (1): Date Added
+## 
+## ℹ Use `spec()` to retrieve the full column specification for this data.
+## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+<pre class="r"><code>colnames(bw_gtdb_tax)[1] &lt;- &#39;id&#39;
 
-tictoc::tic.clearlog()
-tictoc::tic(paste0(&quot;Running microtrait for &quot;, length(genomes_files)))
-microtrait_results = microtrait::extract.traits.parallel(genomes_paths, 
-                                                         output_paths,
-                                                         ncores = floor(parallel::detectCores()*0.9))
-tictoc::toc(log = &quot;TRUE&quot;)</code></pre>
-<div id="recovering-from-an-interrupted-job" class="section level2" number="2.1">
-<h2><span class="header-section-number">2.1</span> Recovering from an
-interrupted job</h2>
-<p>If batching is not possible and you are unable to run the above chunk
-in one sitting, this code chunk will let you “find your spot” so you can
-resume extracting traits without starting over.</p>
-<pre class="r"><code>rds_files = list.files(&#39;./data/microtrait_output&#39;, full.names = F, 
-                       recursive = F, pattern = &quot;.microtrait.rds$&quot;) %&gt;%
-  sub(pattern = &#39;.microtrait.rds$&#39;, replacement = &#39;.fna&#39;)
-genomes_files2 &lt;- genomes_files[!(genomes_files %in% rds_files)]
-genomes_files &lt;- genomes_files2
-genomes_paths = file.path(&#39;./data/all_fna&#39;, genomes_files2)
-output_paths = rep(&#39;./data/microtrait_output&#39;, times = length(genomes_files2))</code></pre>
+# remove prefix in bin ID to match with bin_counts
+bw_gtdb_tax$id &lt;- sub(&quot;^3300050821_&quot;, &quot;&quot;, bw_gtdb_tax$id)</code></pre>
 </div>
-</div>
-<div id="build-trait-matrices-from-results" class="section level1" number="3">
-<h1><span class="header-section-number">3</span> Build trait matrices
-from results</h1>
-<p>At this point, we have a folder containing <code>.rds</code> outputs
-of trait extraction. We load these outputs into a variable
-<code>genomeset_results</code>.</p>
-<pre class="r"><code>rds_files = list.files(&#39;./data/microtrait_output&#39;, full.names = T, recursive = F, 
-                       pattern = &quot;.microtrait.rds$&quot;)
-microtrait_results &lt;- lapply(rds_files, readRDS)
-genomeset_results = microtrait::make.genomeset.results(rds_files = rds_files,
-                                                       ids = sub(&quot;.microtrait.rds&quot;, &quot;&quot;,
-                                                                 basename(rds_files)),
-                                                       ncores = 1)
+<div id="trait-selection" class="section level1" number="2">
+<h1><span class="header-section-number">2</span> Trait selection</h1>
+<p>Various traits are selected from the trait matrix in
+<code>genomeset_results</code> for analysis.</p>
+<div id="select-all-traits" class="section level2" number="2.1">
+<h2><span class="header-section-number">2.1</span> Select all
+traits</h2>
+<p>Here we select traits at the highest level of granularity. Many
+traits are continuous, but since we only care about whether they are
+present, we convert them to binary data. Column names are also separated
+out, mostly as an optional step for quick reference.</p>
+<pre class="r"><code>bw_all_traits &lt;- genomeset_results[[&#39;trait_matrixatgranularity3&#39;]] %&gt;% microtrait::trait.continuous2binary()</code></pre>
+<pre><code>## Warning: `funs()` was deprecated in dplyr 0.8.0.
+## ℹ Please use a list of either functions or lambdas:
+## 
+## # Simple named list: list(mean = mean, median = median)
+## 
+## # Auto named with `tibble::lst()`: tibble::lst(mean, median)
+## 
+## # Using lambdas list(~ mean(., trim = .2), ~ median(., na.rm = TRUE))
+## ℹ The deprecated feature was likely used in the microtrait package.
+##   Please report the issue to the authors.
+## This warning is displayed once every 8 hours.
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+## generated.</code></pre>
+<pre class="r"><code># all_traits_colnames &lt;- colnames(genomeset_results[[&#39;trait_matrixatgranularity3&#39;]]) %&gt;% as.data.frame()
 
-# export to access again later
-saveRDS(genomeset_results, &quot;data/genomeset_results.rds&quot;)</code></pre>
+# remove undetected traits
+temp.1 &lt;- as.data.frame(cbind((colSums(bw_all_traits[,2:192])))) # out of 191 total traits + excluding &#39;id&#39; column
+erase.1 &lt;- temp.1 %&gt;% filter(V1==0)
+erase.1$row_names &lt;- row.names(erase.1)
+bw_all_traits &lt;- bw_all_traits[, !(names(bw_all_traits) %in% erase.1$row_names)]
+
+# remove prefix in bin ID to match with bin_counts
+bw_all_traits$id &lt;- sub(&quot;^3300050821_&quot;, &quot;&quot;, bw_all_traits$id)</code></pre>
+</div>
+<div id="select-complex-carbohydrate-depolymerization-traits---dont-do" class="section level2" number="2.2">
+<h2><span class="header-section-number">2.2</span> Select complex
+carbohydrate depolymerization traits - don’t do</h2>
+<p>Upon further investigation, it was found that the majority of the
+MAGs contained these traits. Thus, they were considered unhelpful for
+the present work. The code remains here for posterity but serves no
+purpose for the remainder of the document.</p>
+<pre class="r"><code>bw_ccd &lt;- bw_all_traits %&gt;%
+  select(starts_with(&quot;Resource Acquisition:Substrate degradation:complex carbohydrate depolymerization&quot;))
+bw_ccd &lt;- cbind(bw_all_traits$id, bw_ccd)
+colnames(bw_ccd)[1] &lt;- &quot;id&quot;
+# ccd_colnames &lt;- colnames(bw_ccd) %&gt;% as.data.frame()</code></pre>
+</div>
+<div id="select-carbohydrate-transport-traits" class="section level2" number="2.3">
+<h2><span class="header-section-number">2.3</span> Select carbohydrate
+transport traits</h2>
+<p>After some preliminary analysis, it was found that most transport
+traits were irrelevant except potentially tri-, tetra-, and
+oligosaccharide transporters. Thus, all but these three were
+excluded.</p>
+<pre class="r"><code>bw_transport &lt;- bw_all_traits %&gt;%
+  select(ends_with(&#39;oligosaccharide transport&#39;) | ends_with(&#39;trisaccharide transport&#39;) | ends_with(&#39;tetrasaccharide transport&#39;))
+# note: carb derivative transport trait undetected
+bw_transport &lt;- cbind(bw_all_traits$id, bw_transport)
+colnames(bw_transport)[1] &lt;- &quot;id&quot;
+
+# transport_colnames &lt;- colnames(bw_transport) %&gt;% as.data.frame()</code></pre>
+</div>
+<div id="select-gh-genes" class="section level2" number="2.4">
+<h2><span class="header-section-number">2.4</span> Select GH genes</h2>
+<p>Of the several CAZyme classes, microTrait detected only genes in the
+glycoside hydrolase (GH) families, so we select and analyze these,
+considering them indicative of bacterial decomposers. Also, the GH genes
+are stored in <code>hmm_matrix</code> rather than
+<code>trait_matrixatgranularity3</code>.</p>
+<p>Selection of GH genes from the HMM matrix was done manually, based on
+three qualities. First, all GH genes follow the naming convention “GH#”,
+where # is the GH family number (<em>e.g.</em>, GH23). Second, there are
+relatively few GH genes (41 in this case). Third, the GH gene columns
+are clustered together in the matrix, making their isolation
+straightforward and trivial. To replicate this process for a different
+data set, filter <code>hmm_colnames</code> with the search term “GH” and
+find the results following the GH naming convention. Check that the row
+numbers (which correspond to column numbers in <code>hmm_matrix</code>)
+are consecutive, then use those numbers as the selection range.</p>
+<p>Chitin-associated and/or overabundant GH families were excluded.
+Please refer to the main thesis document for the logic behind these
+decisions.</p>
+<pre class="r"><code># separate hmm_matrix and colnames from genomeset_results 
+hmm_matrix &lt;- genomeset_results[[&quot;hmm_matrix&quot;]]
+# hmm_colnames &lt;- colnames(genomeset_results[[&quot;hmm_matrix&quot;]]) %&gt;% as.data.frame()
+
+# selecting GH genes -&gt; 41 total
+bw_gh &lt;- as.data.frame(cbind(hmm_matrix$id, hmm_matrix[,1792:1832])) # gh genes: &quot;GH#&quot;
+bw_gh[,2:42] &lt;- lapply(bw_gh[,2:42], as.numeric) # convert to numeric
+bw_gh[,2:42] &lt;- bw_gh[,2:42] - 1 # fix offset (binary)
+colnames(bw_gh)[1] = &quot;id&quot;
+
+# exclude GH genes not detected -&gt; 40 total
+temp.1 &lt;- as.data.frame(cbind((colSums(bw_gh[,2:42]))))
+erase.1 &lt;- temp.1 %&gt;% filter(V1==0) # only GH7
+erase.1$row_names &lt;- row.names(erase.1)
+bw_gh &lt;- bw_gh[, !(names(bw_gh) %in% erase.1$row_names)]
+
+# excluding GH genes - doing stepwise for safety, basically. may merge later
+
+# exclude chitin-only GH genes -&gt; 36 total
+erase.1 &lt;- c(&#39;GH18&#39;, &#39;GH19&#39;, &#39;GH20&#39;, &#39;GH23&#39;)
+bw_gh &lt;- bw_gh[, !(names(bw_gh) %in% erase.1)]
+
+# exclude GH genes that include chitin -&gt; 35 total
+erase.1 &lt;- c(&#39;GH3&#39;)
+bw_gh &lt;- bw_gh[, !(names(bw_gh) %in% erase.1)]
+
+# exclude overly abundant GH genes (more than half the MAGs) -&gt; 33 total
+temp.1 &lt;- as.data.frame(cbind((colSums(bw_gh[,2:36]))))
+erase.1 &lt;- temp.1 %&gt;% filter(V1 &gt; 408)
+erase.1$row_names &lt;- row.names(erase.1)
+bw_gh &lt;- bw_gh[, !(names(bw_gh) %in% erase.1$row_names)]
+
+# remove prefix in bin ID to match with bin_counts
+bw_gh$id &lt;- sub(&quot;^3300050821_&quot;, &quot;&quot;, bw_gh$id)</code></pre>
+</div>
+<div id="combine-gh-and-transport-traits-isolate-decomposers" class="section level2" number="2.5">
+<h2><span class="header-section-number">2.5</span> Combine GH and
+transport traits; isolate decomposers</h2>
+<p>To analyze both GH and transport traits, we simply merge the data
+frames. At this point, we are trying to isolate the decomposer genomes
+from the rest of the MAGs, so we do this here as well based on presence
+of the traits we selected earlier.</p>
+<pre class="r"><code>bw_gh_transport &lt;- merge(bw_gh, bw_transport)
+
+# get colnames
+bw_gh_transport_colnames &lt;- colnames(bw_gh_transport) %&gt;% as.data.frame()
+
+# select decomposer MAGs -&gt; 795 total
+a &lt;- as.data.frame(rowSums(bw_gh_transport[2:37]))
+a &lt;- cbind(bw_gh_transport$id, a)
+colnames(a)[1:2] &lt;- c(&quot;id&quot;, &quot;V1&quot;) # dummy names
+erase.1 &lt;- a %&gt;% filter(V1 == 0)
+bw_gh_transport &lt;- bw_gh_transport[!(bw_gh_transport$id %in% erase.1$id),]
+
+# append taxa
+bw_gh_transport &lt;- merge(bw_gh_transport, bw_gtdb_tax)
+# select bacterial MAGs -&gt; 790 total
+erase.1 &lt;- c(&#39;Archaea&#39;)
+bw_gh_transport &lt;- bw_gh_transport[!(bw_gh_transport$Domain %in% erase.1),]</code></pre>
+</div>
+</div>
+<div id="export-data" class="section level1" number="3">
+<h1><span class="header-section-number">3</span> Export data</h1>
+<p>This step mostly just exists so different Rmd files can access the
+same data.</p>
+<pre class="r"><code>save(bw_gtdb_tax, bw_all_traits, bw_transport, bw_gh, bw_gh_transport, file = &quot;data/traits.RData&quot;)</code></pre>
 </div>
 
 

@@ -1,0 +1,184 @@
+---
+title: "Trait selection and processing"
+author: "Seojin Jung"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libs, warning=FALSE, message=FALSE}
+packages <- c("R.utils", "RColorBrewer", "ape", "assertthat", "checkmate",
+              "coRdon", "corrplot", "dendextend", "devtools", "doParallel", 
+              "dplyr", "factoextra", "formatR", "futile.logger", "ggplot2", 
+              "grid", "gtools", "kmed", "lazyeval", "magrittr", "parallel", 
+              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr", "vegan")
+for (pkg in packages) {
+  library(pkg, character.only=TRUE)
+}
+
+# bioconductor packages
+library(BiocManager)
+library(Biostrings)
+library(ComplexHeatmap)
+library(coRdon)
+
+# everything else
+library(gRodon)
+library(pairwiseAdonis)
+library(EcolUtils)
+library(ggtree)
+library(microtrait)
+```
+
+```{r load_genomeset_results}
+genomeset_results <- readRDS("data/genomeset_results.rds")
+```
+
+This file goes over trait selection from the microTrait outputs.
+
+# Get taxonomy information from MetaBAT output
+
+MAG metadata from sequencing was stored in a TSV. To help identify MAGs, their taxonomic information is extracted and appended to the clusters as strings approximating GTDB format.
+
+```{r get_taxonomy}
+# extract taxonomy
+bw_gtdb_tax <- read_tsv("data/metaG_coassembly_all_metabat.tsv") %>%
+  select('Bin ID', Domain, Phylum, Class, Order, Family, Genus) 
+colnames(bw_gtdb_tax)[1] <- 'id'
+
+# remove prefix in bin ID to match with bin_counts
+bw_gtdb_tax$id <- sub("^3300050821_", "", bw_gtdb_tax$id)
+```
+
+# Trait selection
+
+Various traits are selected from the trait matrix in `genomeset_results` for analysis.
+
+## Select all traits
+
+Here we select traits at the highest level of granularity. Many traits are continuous, but since we only care about whether they are present, we convert them to binary data. Column names are also separated out, mostly as an optional step for quick reference.
+
+```{r select_all_traits}
+bw_all_traits <- genomeset_results[['trait_matrixatgranularity3']] %>% microtrait::trait.continuous2binary()
+# all_traits_colnames <- colnames(genomeset_results[['trait_matrixatgranularity3']]) %>% as.data.frame()
+
+# remove undetected traits
+temp.1 <- as.data.frame(cbind((colSums(bw_all_traits[,2:192])))) # out of 191 total traits + excluding 'id' column
+erase.1 <- temp.1 %>% filter(V1==0)
+erase.1$row_names <- row.names(erase.1)
+bw_all_traits <- bw_all_traits[, !(names(bw_all_traits) %in% erase.1$row_names)]
+
+# remove prefix in bin ID to match with bin_counts
+bw_all_traits$id <- sub("^3300050821_", "", bw_all_traits$id)
+```
+
+## Select complex carbohydrate depolymerization traits - don't do
+
+Upon further investigation, it was found that the majority of the MAGs contained these traits. Thus, they were considered unhelpful for the present work. The code remains here for posterity but serves no purpose for the remainder of the document.
+
+```{r select_ccd_traits, eval=FALSE}
+bw_ccd <- bw_all_traits %>%
+  select(starts_with("Resource Acquisition:Substrate degradation:complex carbohydrate depolymerization"))
+bw_ccd <- cbind(bw_all_traits$id, bw_ccd)
+colnames(bw_ccd)[1] <- "id"
+# ccd_colnames <- colnames(bw_ccd) %>% as.data.frame()
+```
+
+## Select carbohydrate transport traits
+
+After some preliminary analysis, it was found that most transport traits were irrelevant except potentially tri-, tetra-, and oligosaccharide transporters. Thus, all but these three were excluded.
+
+```{r select_transport_traits}
+bw_transport <- bw_all_traits %>%
+  select(ends_with('oligosaccharide transport') | ends_with('trisaccharide transport') | ends_with('tetrasaccharide transport'))
+# note: carb derivative transport trait undetected
+bw_transport <- cbind(bw_all_traits$id, bw_transport)
+colnames(bw_transport)[1] <- "id"
+
+# transport_colnames <- colnames(bw_transport) %>% as.data.frame()
+```
+
+## Select GH genes
+
+Of the several CAZyme classes, microTrait detected only genes in the glycoside hydrolase (GH) families, so we select and analyze these, considering them indicative of bacterial decomposers. Also, the GH genes are stored in `hmm_matrix` rather than `trait_matrixatgranularity3`.
+
+Selection of GH genes from the HMM matrix was done manually, based on three qualities. First, all GH genes follow the naming convention "GH#", where \# is the GH family number (*e.g.*, GH23). Second, there are relatively few GH genes (41 in this case). Third, the GH gene columns are clustered together in the matrix, making their isolation straightforward and trivial. To replicate this process for a different data set, filter `hmm_colnames` with the search term "GH" and find the results following the GH naming convention. Check that the row numbers (which correspond to column numbers in `hmm_matrix`) are consecutive, then use those numbers as the selection range.
+
+Chitin-associated and/or overabundant GH families were excluded. Please refer to the main thesis document for the logic behind these decisions.
+
+```{r select_gh_genes}
+# separate hmm_matrix and colnames from genomeset_results 
+hmm_matrix <- genomeset_results[["hmm_matrix"]]
+# hmm_colnames <- colnames(genomeset_results[["hmm_matrix"]]) %>% as.data.frame()
+
+# selecting GH genes -> 41 total
+bw_gh <- as.data.frame(cbind(hmm_matrix$id, hmm_matrix[,1792:1832])) # gh genes: "GH#"
+bw_gh[,2:42] <- lapply(bw_gh[,2:42], as.numeric) # convert to numeric
+bw_gh[,2:42] <- bw_gh[,2:42] - 1 # fix offset (binary)
+colnames(bw_gh)[1] = "id"
+
+# exclude GH genes not detected -> 40 total
+temp.1 <- as.data.frame(cbind((colSums(bw_gh[,2:42]))))
+erase.1 <- temp.1 %>% filter(V1==0) # only GH7
+erase.1$row_names <- row.names(erase.1)
+bw_gh <- bw_gh[, !(names(bw_gh) %in% erase.1$row_names)]
+
+# excluding GH genes - doing stepwise for safety, basically. may merge later
+
+# exclude chitin-only GH genes -> 36 total
+erase.1 <- c('GH18', 'GH19', 'GH20', 'GH23')
+bw_gh <- bw_gh[, !(names(bw_gh) %in% erase.1)]
+
+# exclude GH genes that include chitin -> 35 total
+erase.1 <- c('GH3')
+bw_gh <- bw_gh[, !(names(bw_gh) %in% erase.1)]
+
+# exclude overly abundant GH genes (more than half the MAGs) -> 33 total
+temp.1 <- as.data.frame(cbind((colSums(bw_gh[,2:36]))))
+erase.1 <- temp.1 %>% filter(V1 > 408)
+erase.1$row_names <- row.names(erase.1)
+bw_gh <- bw_gh[, !(names(bw_gh) %in% erase.1$row_names)]
+
+# remove prefix in bin ID to match with bin_counts
+bw_gh$id <- sub("^3300050821_", "", bw_gh$id)
+```
+
+## Combine GH and transport traits; isolate decomposers
+
+To analyze both GH and transport traits, we simply merge the data frames. At this point, we are trying to isolate the decomposer genomes from the rest of the MAGs, so we do this here as well based on presence of the traits we selected earlier.
+
+```{r merge_gh_transport}
+bw_gh_transport <- merge(bw_gh, bw_transport)
+
+# get colnames
+bw_gh_transport_colnames <- colnames(bw_gh_transport) %>% as.data.frame()
+
+# select decomposer MAGs -> 795 total
+a <- as.data.frame(rowSums(bw_gh_transport[2:37]))
+a <- cbind(bw_gh_transport$id, a)
+colnames(a)[1:2] <- c("id", "V1") # dummy names
+erase.1 <- a %>% filter(V1 == 0)
+bw_gh_transport <- bw_gh_transport[!(bw_gh_transport$id %in% erase.1$id),]
+
+# append taxa
+bw_gh_transport <- merge(bw_gh_transport, bw_gtdb_tax)
+# select bacterial MAGs -> 790 total
+erase.1 <- c('Archaea')
+bw_gh_transport <- bw_gh_transport[!(bw_gh_transport$Domain %in% erase.1),]
+```
+
+# Export data 
+
+This step mostly just exists so different Rmd files can access the same data.
+
+```{r export_data}
+save(bw_gtdb_tax, bw_all_traits, bw_transport, bw_gh, bw_gh_transport, file = "data/traits.RData")
+```
+

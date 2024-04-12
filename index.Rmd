@@ -18,7 +18,7 @@ The following directory contains HTML files outlining the code used to generate 
 * [Generating Sankey plot](mag_taxonomy_sankey.html)
 * [MetaBAT analyses](metabat_analyses.html)
 * [Extract traits and build matrices](trait_matrices.html)
-* [Trait selection and processing]()
+* [Trait selection and processing](trait_select.html)
 * [Problematic classification of decomposers]()
 * [Hierarchical clustering and heatmap]()
 * [Differential abundance analysis]()

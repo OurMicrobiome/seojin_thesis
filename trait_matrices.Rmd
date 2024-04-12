@@ -82,4 +82,7 @@ genomeset_results = microtrait::make.genomeset.results(rds_files = rds_files,
                                                        ids = sub(".microtrait.rds", "",
                                                                  basename(rds_files)),
                                                        ncores = 1)
+
+# export to access again later
+saveRDS(genomeset_results, "data/genomeset_results.rds")
 ```
