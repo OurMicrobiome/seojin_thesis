@@ -1,0 +1,80 @@
+---
+title: "Counts of MAGs per trait"
+author: "Seojin Jung"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libs, warning=FALSE, message=FALSE}
+packages <- c("R.utils", "RColorBrewer", "ape", "assertthat", "checkmate",
+              "coRdon", "corrplot", "dendextend", "devtools", "doParallel",
+              "dplyr", "DT", "factoextra", "formatR", "futile.logger", "ggplot2", 
+              "grid", "gtools", "kmed", "lazyeval", "magrittr", "parallel", 
+              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr", "vegan")
+for (pkg in packages) {
+  library(pkg, character.only=TRUE)
+}
+
+# bioconductor packages
+library(BiocManager)
+library(Biostrings)
+library(ComplexHeatmap)
+library(coRdon)
+
+# everything else
+library(gRodon)
+library(pairwiseAdonis)
+library(EcolUtils)
+library(ggtree)
+library(microtrait)
+```
+
+```{r load_data}
+load("data/traits.RData")
+```
+
+For each trait, the number of MAGs in which that trait was detected is listed in a data frame. Trait levels (except for GH genes) are separated out into distinct columns for ease of comprehension. 
+
+```{r counts_all}
+# all traits
+bw_all_counts <- sapply(bw_all_traits, function(column) sum(column > 0)) %>% as.data.frame()
+bw_all_counts <- bw_all_counts[-1, , drop = FALSE]
+colnames(bw_all_counts)[1] <- "Number of MAGs"
+bw_all_counts <- bw_all_counts %>% rownames_to_column(var = "Trait name")
+bw_all_counts <- bw_all_counts %>%
+  separate('Trait name', 
+           into = c("Trait level 1", "Trait level 2", "Trait level 3", "Trait level 4",
+                    "Trait level 5", "Trait level 6", "Trait level 7"), 
+           sep = ":", extra = "merge")
+
+datatable(bw_all_counts)
+```
+
+```{r counts_transport}
+# transport
+bw_transport_counts <- sapply(bw_transport, function(column) sum(column > 0)) %>% as.data.frame()
+bw_transport_counts <- bw_transport_counts[-1, , drop = FALSE]
+colnames(bw_transport_counts)[1] <- "Number of MAGs"
+bw_transport_counts <- bw_transport_counts %>% rownames_to_column(var = "Trait name")
+bw_transport_counts <- bw_transport_counts %>%
+  separate('Trait name', 
+           into = c("Trait level 1", "Trait level 2", "Trait level 3", "Trait level 4",
+                    "Trait level 5"), 
+           sep = ":", extra = "merge")
+
+datatable(bw_transport_counts)
+```
+
+```{r counts_gh}
+# GH
+bw_gh_counts <- sapply(bw_gh, function(column) sum(column > 0)) %>% as.data.frame()
+bw_gh_counts <- bw_gh_counts[-1, , drop = FALSE]
+colnames(bw_gh_counts)[1] <- "Number of MAGs"
+bw_gh_counts <- bw_gh_counts %>% rownames_to_column(var = "GH family")
+
+datatable(bw_gh_counts)
+```
