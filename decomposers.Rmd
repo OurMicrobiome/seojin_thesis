@@ -87,6 +87,8 @@ decom_simple %>%
   xlab('') + 
   ylab('') +
   theme_void()
+
+# ggsave("images/decom_ratio.png", plot=last_plot())
 ```
 
 Upon lookup in the MetaBAT output, the taxonomic identity of MAG 3300050821_379 was found to be the following:
@@ -121,6 +123,8 @@ ggplot(bw_gh_counts, aes(x = reorder(`GH family`, `Number of MAGs`),
   labs(title = 'GH gene frequency across MAGs', x = 'GH family') +
   theme(legend.position = 'none', 
         axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+# ggsave("images/gh_distribution.png", plot=last_plot())
 ```
 ```{r gh_per_mag, eval=FALSE}
 row_sums <- rowSums(bw_gh[,-1])
