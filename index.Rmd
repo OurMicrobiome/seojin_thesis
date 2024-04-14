@@ -20,7 +20,7 @@ The following directory contains HTML files outlining the code used to generate 
 * [Extract traits and build matrices](trait_matrices.html)
 * [Trait selection and processing](trait_select.html)
 * [Problematic classification of decomposers](decomposers.html)
-* [Hierarchical clustering and heatmap]()
+* [Hierarchical clustering and heatmap](clustering_heatmap.html)
 * [Differential abundance analysis]()
 
 # Miscellaneous code not included in main work
