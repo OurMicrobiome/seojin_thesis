@@ -1,0 +1,165 @@
+---
+title: "Differential abundance analysis"
+author: "Seojin Jung"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libs, warning=FALSE, message=FALSE}
+packages <- c("R.utils", "RColorBrewer", "ape", "assertthat", "checkmate",
+              "coRdon", "corrplot", "dendextend", "DESeq2", "devtools", "doParallel", 
+              "dplyr", "factoextra", "formatR", "futile.logger", "ggplot2", 
+              "grid", "gtools", "kmed", "lazyeval", "magrittr", "parallel", 
+              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr", "vegan")
+for (pkg in packages) {
+  library(pkg, character.only=TRUE)
+}
+
+# bioconductor packages
+library(BiocManager)
+library(Biostrings)
+library(ComplexHeatmap)
+library(coRdon)
+
+# everything else
+library(gRodon)
+library(pairwiseAdonis)
+library(EcolUtils)
+library(ggtree)
+library(microtrait)
+```
+
+```{r load_data}
+load("data/traits.RData")
+```
+
+This file goes over the differential abundance analysis that was performed on the MAGs. Thank you to Jared Gracia-David '23 for providing the DESeq code, from which I was able to generate the figures.
+
+# Running DESeq
+```{r deseq}
+host_counts <- readRDS("data/bin_counts.rds")
+# round to int
+host_counts <- host_counts %>%
+  mutate_if(is.numeric, ~round(., 0))
+
+# organic
+host_counts_o <- host_counts %>%
+  select(starts_with('bin') | ends_with("O"))
+
+# mineral
+host_counts_m <- host_counts %>%
+  select(starts_with('bin') | ends_with("M"))
+
+# set row names
+hc <- as.matrix(host_counts[,-1])
+row.names(hc) <- host_counts$bin
+hc_o <- as.matrix(host_counts_o[,-1])
+row.names(hc_o) <- host_counts_o$bin
+hc_m <- as.matrix(host_counts_m[,-1])
+row.names(hc_m) <- host_counts_m$bin
+
+#Compile coldata
+sample_mapping <- read_csv("data/Sample_mapping.csv")
+sample_mapping$Treatment <- as.factor(sample_mapping$Treatment)
+sample_mapping$Layer <- as.factor(sample_mapping$Layer)
+
+#Treatment: heated vs control - plus separate analysis by layer
+coldata <- sample_mapping %>%
+  select("Sample", "Treatment")
+
+coldata_o <- sample_mapping %>%
+  filter(Layer == "Organic") %>%
+  select("Sample", "Treatment")
+
+coldata_m <- sample_mapping %>%
+  filter(Layer == "Mineral") %>%
+  select("Sample", "Treatment")
+
+#Run DESeq
+dds <- DESeqDataSetFromMatrix(countData = hc,
+                              colData = coldata,
+                              design = ~ Treatment)
+dds$Treatment = relevel(dds$Treatment, ref="Control")
+dds <- DESeq(dds)
+res <- results(dds, tidy=TRUE)
+
+# Add a column to the data frame to specify if they are UP- or DOWN- regulated 
+#(log2fc respectively positive or negative)
+# from https://biostatsquid.com/volcano-plots-r-tutorial/
+res$diffexpressed <- 'NO'
+res$diffexpressed[res$log2FoldChange > 0.6 & res$padj < 0.05] <- 'UP'
+res$diffexpressed[res$log2FoldChange < -0.6 & res$padj < 0.05] <- 'DOWN'
+
+res.sig <- res %>%
+  filter(padj<0.05)
+```
+
+# Volcano plot - All MAGs
+
+```{r volcano_all}
+ggplot(data = res, aes(x = log2FoldChange, y = -log10(padj), color = diffexpressed)) +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  ggtitle("Differential abundances of all MAGs based on treatment (all layers)") +
+  xlab(expression("log"[2]*"FC")) +
+  ylab(expression("-log"[10]*"adjusted p-value")) +
+  scale_color_manual(name = "Change in abundance",
+                     values = c("#f8766dff", "grey", "#00bfc4ff"),
+                     labels = c("Decreased", "Not significant", "Increased")) +
+  theme(legend.position = "bottom") +
+  geom_point()
+```
+
+As shown, 433 MAGs were missing adjusted *p*-values (due to low base mean counts), so they were excluded.
+
+# Volcano plot - Decomposer MAGs
+## Divide results into clusters and add cluster labels
+
+```{r cluster_results}
+# select decomposer mags
+res.decomp <- res[res$row %in% bw_gh_transport$id, ]
+res.decomp.sig <- res.decomp %>%
+  filter(padj<0.05)
+
+# version without taxa for now
+bw_gh_transport_cl_2 <- bw_gh_transport[, 1:37]
+row.names(bw_gh_transport_cl_2) <- bw_gh_transport$id
+bw_gh_transport_cl_2 <- bw_gh_transport_cl_2[, !(names(bw_gh_transport_cl_2) %in% c('id'))]
+dist.1_2 <- vegdist(bw_gh_transport_cl_2, method = "jaccard", binary = TRUE)
+clust.1_2 <- hclust(dist.1_2, method="ward.D2")
+row_dend_2 = as.dendrogram(clust.1_2)
+# get assignments
+cluster_assignments <- dendextend::cutree(row_dend_2, k = 20) %>% as.data.frame()
+colnames(cluster_assignments)[1] <- 'cluster'
+cluster_assignments <- rownames_to_column(cluster_assignments, var = "row")
+# match by id
+res_clustered <- merge(cluster_assignments, res.decomp)
+
+# label only significant for figure
+res_clustered$cluster <- ifelse(res_clustered$padj < 0.05, res_clustered$cluster, NA)
+```
+
+## Plot results
+
+```{r volcano_decom}
+ggplot(data = res_clustered, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_vline(xintercept = c(-0.6, 0.6), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  ggtitle("Differential abundances based on treatment, by cluster (all layers)") +
+  xlab(expression("log"[2]*"FC")) +
+  ylab(expression("-log"[10]*"adjusted p-value")) +
+  scale_color_discrete(name = "Cluster") +
+  theme(legend.position = "bottom", legend.direction = "horizontal") +
+  geom_point(aes(color = factor(cluster))) +
+  geom_text(aes(label = cluster), nudge_y = 0.1, size = 2)
+```
+
+Here, 413 rows were missing adjusted *p*-values, so they were removed.

@@ -21,7 +21,7 @@ The following directory contains HTML files outlining the code used to generate 
 * [Trait selection and processing](trait_select.html)
 * [Problematic classification of decomposers](decomposers.html)
 * [Hierarchical clustering and heatmap](clustering_heatmap.html)
-* [Differential abundance analysis]()
+* [Differential abundance analysis](differential_abundance.html)
 
 # Miscellaneous code not included in main work
 * [Counts of MAGs per trait](mag_cts_per_trait.html)
