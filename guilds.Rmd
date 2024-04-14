@@ -1,0 +1,198 @@
+---
+title: "Initial guild clustering"
+author: "Seojin Jung"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libs, warning=FALSE, message=FALSE}
+packages <- c("R.utils", "RColorBrewer", "ape", "assertthat", "checkmate",
+              "coRdon", "corrplot", "dendextend", "devtools", "doParallel", 
+              "dplyr", "factoextra", "formatR", "futile.logger", "ggplot2", 
+              "grid", "gtools", "kmed", "lazyeval", "magrittr", "parallel", 
+              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr", "vegan")
+for (pkg in packages) {
+  library(pkg, character.only=TRUE)
+}
+
+# bioconductor packages
+library(BiocManager)
+library(Biostrings)
+library(ComplexHeatmap)
+library(coRdon)
+
+# everything else
+library(gRodon)
+library(pairwiseAdonis)
+library(EcolUtils)
+library(ggtree)
+library(microtrait)
+```
+
+```{r load_data}
+load("data/traits.RData")
+```
+
+This file performs guild clustering that ultimately was not used in the final thesis, but it is kept here for posterity. Thank you to Dr. Luciana Chavez Rodriguez for providing the starting code, which was hugely informative and ultimately aided me in developing the script that was used for my thesis.
+
+# Seeding randomness and activating functions
+
+Set the randomness seed for consistent results. Two functions were also written for performing within-guild and between-guild clustering on each set of traits.
+
+```{r random_and_funcs}
+set.seed(1) # randomness seed
+
+# FUNCTION: similarity within guilds
+intra_guild_sim <- function(traits, distance, cluster) {
+  my_vec       = c() 
+  nguilds.1    = seq(2, nrow(traits), 2) 
+  
+  # include last row if nrow is odd
+  if (nrow(traits) %% 2 != 0) {
+    nguilds.1 <- c(nguilds.1, nrow(traits))
+  }
+  
+  for(i in nguilds.1) {
+    v                      = cutree(cluster,k=i)
+    genome2guild           = data.frame(guild = factor(v))
+    rownames(genome2guild) = names(v)
+    adonis_2               = vegan::adonis2(distance ~ guild, data = genome2guild, perm = 1)
+    temp                   = adonis_2$R2
+    temp_1                 = temp[1]
+    my_out                 = temp_1
+    my_vec   <- c(my_vec, my_out)   
+  }
+  
+  return(as.data.frame(cbind(nguilds.1,my_vec)))
+}
+
+# FUNCTION: similarity between guilds
+inter_guild_sim <- function(distance, cluster, k) {
+  v                      = cutree(cluster,k=k)
+  genome2guild           = data.frame(guild = factor(v))
+  rownames(genome2guild) = names(v)
+  adonis_1               = pairwiseAdonis::pairwise.adonis(distance,genome2guild$guild,
+                                                           perm = 999,p.adjust.m='BH')
+  test.clus.1            = adonis.pair(distance, genome2guild[,"guild"], 
+                                       nper = 999, corr.method = "fdr")
+  adonis_2               = vegan::adonis2(distance ~ guild, data = genome2guild, perm = 999)
+  
+  # return adonis_1, test.clus.1, and adonis_2
+  return(list(adonis_1 = adonis_1, test.clus.1 = test.clus.1, adonis_2 = adonis_2))
+}
+
+```
+
+## Clustering on all traits
+
+```{r cluster_all, message=FALSE, warning=FALSE, eval = FALSE}
+# assign row names for cluster labeling
+bw_all_cl <- bw_all
+row.names(bw_all_cl) <- bw_all_cl$id
+bw_all_cl <- bw_all_cl[, -which(names(bw_all_cl) == "id")]
+
+# cluster
+distance.all  = vegdist(bw_all_traits[2:147], method = "jaccard", binary = TRUE) 
+cluster.all   = hclust(distance.all, method="ward.D2")
+
+# similarity within guilds 
+mat_r2_1_all <- intra_guild_sim(bw_all_traits, distance.all, cluster.all)
+# similarity among guilds
+inter_all <- inter_guild_sim(distance.all, cluster.all, 42) 
+```
+
+## Clustering on carbohydrate transport traits
+
+```{r cluster_transport, message=FALSE, warning=FALSE, eval = FALSE}
+# assign row names for cluster labeling
+bw_transport_cl <- bw_transport
+row.names(bw_transport_cl) <- bw_transport_cl$id
+bw_transport_cl <- bw_transport_cl[, -which(names(bw_transport_cl) == "id")]
+
+# cluster
+distance.tr  = vegdist(bw_transport_cl, method = "jaccard", binary = TRUE) 
+cluster.tr   = hclust(distance.tr, method="ward.D2")
+
+# similarity within guilds 
+mat_r2_1_tr <- intra_guild_sim(bw_transport_cl, distance.tr, cluster.tr)
+# similarity among guilds
+inter_tr <- inter_guild_sim(distance.tr, cluster.tr, 4) 
+```
+
+## Clustering on GH genes
+
+```{r cluster_gh, message=FALSE, warning=FALSE, eval = FALSE}
+# assign row names for cluster labeling
+bw_gh_cl <- bw_gh
+row.names(bw_gh_cl) <- bw_gh_cl$id
+bw_gh_cl <- bw_gh_cl[, -which(names(bw_gh_cl) == "id")]
+
+# cluster
+distance.gh  = vegdist(bw_gh_cl, method = "jaccard", binary = TRUE) 
+cluster.gh   = hclust(distance.gh, method="ward.D2")
+
+# similarity within guilds
+mat_r2_1_gh <- intra_guild_sim(bw_gh_cl, distance.gh, cluster.gh)
+# similarity among guilds 
+inter_gh <- inter_guild_sim(distance.gh, cluster.gh, 70) 
+```
+
+## Clustering on GH genes and transport traits
+
+```{r cluster_gh_transport, message=FALSE, warning=FALSE, eval=FALSE}
+# assign row names for cluster labeling
+bw_gh_transport_cl <- bw_gh_transport
+row.names(bw_gh_transport_cl) <- bw_gh_transport_cl$id
+bw_gh_transport_cl <- bw_gh_transport_cl[, -which(names(bw_gh_transport_cl) == "id")]
+
+# cluster
+distance.gh.tr  = vegdist(bw_gh_transport_cl, method = "jaccard", binary = TRUE)
+cluster.gh.tr   = hclust(distance.gh.tr, method="ward.D2")
+
+# similarity within guilds
+mat_r2_1_gh_tr <- intra_guild_sim(bw_gh_transport_cl, distance.gh.tr, cluster.gh.tr)
+# similarity among guilds
+inter_gh_tr <- inter_guild_sim(distance.gh.tr, cluster.gh.tr, 48)
+```
+
+# Attempting to build a dendrogram
+
+The original idea was to build a dendrogram out of the resulting functional groups for each set of traits, but this idea was scrapped. Note that the below code is unfinished and nonfunctional. 
+
+```{r dendrogram_unused, eval=FALSE}
+# functional grouping to compare with taxonomic grouping
+fviz_dend(cluster.opt, k = 2,        # Cut in groups
+           cex = 0.1,                # size of label
+           color_labels_by_k = TRUE,  # color labels by groups
+           ggtheme = theme_gray()     # Change theme
+          )
+
+# circular dendrogram for all traits (help)
+dend <- as.dendrogram(cluster.all) %>% 
+  color_branches(k = 42) %>% # color branches by cluster
+  color_labels(k = 42) %>%
+  set("branches_lwd", 0.3) %>%
+  set("labels_cex", 0.2) %>%
+  circlize_dendrogram(labels_track_height = NA, dend_track_height = 0.75)
+# ggsave("hierarchical_cluster_all.png", plot=last_plot())
+
+# test
+distance.test  = vegdist(bw_op_transport, method = "jaccard", binary = TRUE) 
+cluster.test   = hclust(distance.test, method="ward.D2")
+
+# regular dendrogram for other traits
+dend <- as.dendrogram(cluster.tr) %>% 
+  color_branches(k = 2) %>% # color branches by cluster
+  color_labels(k = 2) %>%
+  set("labels_cex", 0.2) %>%
+  collapse_branch(tol = 0.2) %>%
+  plot(main="Carbohydrate transport traits")
+```

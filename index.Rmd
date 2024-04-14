@@ -25,4 +25,4 @@ The following directory contains HTML files outlining the code used to generate 
 
 # Miscellaneous code not included in main work
 * [Counts of MAGs per trait](mag_cts_per_trait.html)
-* [Initial guild clustering]()
+* [Initial guild clustering](guilds.html)
