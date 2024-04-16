@@ -18,20 +18,17 @@ packages <- c("R.utils", "RColorBrewer", "ape", "assertthat", "checkmate",
               "coRdon", "corrplot", "dendextend", "DESeq2", "devtools", "doParallel", 
               "dplyr", "factoextra", "formatR", "futile.logger", "ggplot2", 
               "grid", "gtools", "kmed", "lazyeval", "magrittr", "parallel", 
-              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr", "vegan")
+              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr")
 for (pkg in packages) {
   library(pkg, character.only=TRUE)
 }
 
 # bioconductor packages
 library(BiocManager)
-library(Biostrings)
-library(ComplexHeatmap)
 library(coRdon)
 
 # everything else
 library(gRodon)
-library(pairwiseAdonis)
 library(EcolUtils)
 library(ggtree)
 library(microtrait)
@@ -163,3 +160,15 @@ ggplot(data = res_clustered, aes(x = log2FoldChange, y = -log10(padj))) +
 ```
 
 Here, 413 rows were missing adjusted *p*-values, so they were removed.
+
+## Organic vs. mineral plots
+
+The following plots were not included in the main text but remain here for access. To generate these plots, the `hc` and `coldata` arguments in the `DESeqDataSetFromMatrix()` method are replaced with their organic (`_o`) and mineral (`_m`) variants.
+
+![Differential abundances of all MAGs, organic layer](images/diff_abund_all_o.png)
+
+![Differential abundances of all MAGs, mineral layer](images/diff_abund_all_m.png)
+
+![Differential abundances of 'decomposer' MAGs, organic layer](images/diff_abund_decom_o.png)
+
+![Differential abundances of 'decomposer' MAGs, mineral layer](images/diff_abund_decom_m.png)
