@@ -18,7 +18,7 @@ packages <- c("R.utils", "RColorBrewer", "ape", "assertthat", "checkmate",
               "coRdon", "corrplot", "dendextend", "DESeq2", "devtools", "doParallel", 
               "dplyr", "factoextra", "formatR", "futile.logger", "ggplot2", 
               "grid", "gtools", "kmed", "lazyeval", "magrittr", "parallel", 
-              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr")
+              "pheatmap", "readr", "stringr", "tibble", "tictoc", "tidyr", "vegan")
 for (pkg in packages) {
   library(pkg, character.only=TRUE)
 }
@@ -97,7 +97,21 @@ res$diffexpressed[res$log2FoldChange < -0.6 & res$padj < 0.05] <- 'DOWN'
 
 res.sig <- res %>%
   filter(padj<0.05)
+bw_class <- bw_gtdb_tax %>% select(id, Class)
+colnames(bw_class)[1] <- 'row'
+res.sig <- merge(res.sig, bw_class)
 ```
+
+# Table of significant results
+
+```{r sig_res}
+library(DT)
+datatable(res.sig %>%
+            select(row, baseMean, log2FoldChange, padj, Class) %>%
+            mutate_if(is.numeric, round, 5)
+)
+```
+
 
 # Volcano plot - All MAGs
 
