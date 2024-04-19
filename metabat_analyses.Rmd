@@ -132,7 +132,10 @@ BW_coassembly_GTDB_all %>%
   coord_flip() +
   ggtitle("Novel Genera per Phylum") +
   ylab("Number of MAGs") + 
-  xlab("Phylum")
+  xlab("Phylum") +
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        plot.title= element_text(size = 15))
 
 datatable(BW_coassembly_GTDB_all %>% 
   filter(is.na(Genus)) %>%
@@ -152,7 +155,10 @@ BW_coassembly_GTDB_all %>%
   coord_flip() +
   ggtitle("Novel Families per Phylum") +
   ylab("Number of MAGs") + 
-  xlab("Phylum")
+  xlab("Phylum") +
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        plot.title= element_text(size = 15))
 
 # ggsave("images/novel_families_per_phylum.png", plot=last_plot())
 ```
@@ -167,7 +173,10 @@ BW_coassembly_GTDB_all %>%
   coord_flip() +
   ggtitle("Novel Orders per Phylum") +
   ylab("Number of MAGs") + 
-  xlab("Phylum")
+  xlab("Phylum") +
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        plot.title= element_text(size = 15))
 
 # ggsave("images/novel_orders_per_phylum.png", plot=last_plot())
 ```
@@ -182,7 +191,10 @@ BW_coassembly_GTDB_all %>%
   coord_flip() +
   ggtitle("Novel Classes per Phylum") +
   ylab("Number of MAGs") + 
-  xlab("Phylum")
+  xlab("Phylum") +
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        plot.title= element_text(size = 15))
 
 # ggsave("images/novel_classes_per_phylum.png", plot=last_plot())
 ```
